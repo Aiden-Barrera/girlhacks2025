@@ -5,3 +5,12 @@
 {"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:55:46.767Z"}
 {"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:58:13.286Z"}
 {"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:58:38.602Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T23:01:57.831Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T23:04:22.343Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T23:05:09.131Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T23:05:49.609Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T23:05:58.643Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:02.986Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:03.027Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/test","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:09.148Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:09.207Z"}

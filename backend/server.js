@@ -41,9 +41,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/test', async (req, res) => {
-  const users = await db.collection('users').find({}).toArray();
+  const users = await db.collection('users').find().toArray();
 
-  return res.status(200).json({"pathway": users[0].pathway});
+  return res.status(200).json({"pathway": users});
 });
 
 app.listen(port, () => {
