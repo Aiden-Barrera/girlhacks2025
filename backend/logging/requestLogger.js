@@ -1,5 +1,5 @@
-import UAParser from 'ua-parser-js';
-import logger from './logger';
+import { UAParser } from 'ua-parser-js';
+import { logger } from './logger.js';
 
 function requestLogger(req, res, next) {
     const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
@@ -27,4 +27,4 @@ function requestLogger(req, res, next) {
     next();
 }
 
-module.exports = requestLogger;
+export default requestLogger;

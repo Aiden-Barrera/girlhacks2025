@@ -1,4 +1,4 @@
-const logger = require('./logger');
+import { logger } from './logger.js';
 
 function responseLogger(statusCode, responseBody, req) {
     const responseData = {
@@ -17,4 +17,4 @@ function responseLogger(statusCode, responseBody, req) {
     }
 }
 
-module.exports = responseLogger;
+export default responseLogger;
