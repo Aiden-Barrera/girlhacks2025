@@ -2,12 +2,25 @@ import express from 'express';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { MongoClient } from 'mongodb';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
 dotenv.config();
 
 const app = express();
 const port = 3000;
+
+// MongoDB connection
+const mongoUrl = process.env.MONGODB_URL;
+const dbName = process.env.DB_NAME;
+let db;
+
+MongoClient.connect(mongoUrl)
+  .then(client => {
+    console.log('Connected to MongoDB');
+    db = client.db(dbName);
+  })
+  .catch(error => console.error('MongoDB connection error:', error));
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
