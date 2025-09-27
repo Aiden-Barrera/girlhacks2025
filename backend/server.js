@@ -40,6 +40,12 @@ app.get('/', (req, res) => {
   return res.status(200).json({"Welcome":"Hello World!"});
 });
 
+app.get('/test', async (req, res) => {
+  const users = await db.collection('users').find({}).toArray();
+
+  return res.status(200).json({"pathway": users[0].pathway});
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });

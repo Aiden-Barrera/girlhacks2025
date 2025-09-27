@@ -1,2 +1,7 @@
 {"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T22:29:58.865Z"}
 {"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T22:29:58.993Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T22:55:19.167Z"}
+{"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T22:55:19.226Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:55:46.767Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:58:13.286Z"}
+{"level":"info","message":{"IP":"::1","URL":"/test","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-27T22:58:38.602Z"}
