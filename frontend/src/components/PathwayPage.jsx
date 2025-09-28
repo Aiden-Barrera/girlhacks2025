@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
-import { Card, Select, Progress, Button, Typography, Row, Col, Space } from 'antd'
+import { Card, Progress, Button, Typography, Row, Col, Space, Input, Modal } from 'antd'
 import { RocketOutlined, SaveOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import mermaid from 'mermaid'
 
 const { Title, Paragraph } = Typography
-const { Option } = Select
 
 function PathwayPage() {
   const mermaidRef = useRef(null)
   const [selectedCareer, setSelectedCareer] = useState('software-engineer')
+  const [showModal, setShowModal] = useState(false)
+  const [experience, setExperience] = useState('')
+  const [desiredRole, setDesiredRole] = useState('')
 
   const careerPaths = {
     'software-engineer': {
@@ -124,39 +126,70 @@ function PathwayPage() {
           </Paragraph>
         </div>
 
-        {/* Career Selection */}
+        {/* Questionnaire Section */}
         <Card style={{ marginBottom: '24px' }}>
-          <Row gutter={[24, 24]} align="middle">
-            <Col xs={24} md={8}>
+          <Title level={4} style={{ marginBottom: '24px' }}>Tell Us About Your Journey</Title>
+          
+          <Row gutter={[24, 24]}>
+            <Col xs={24} md={12}>
               <Space direction="vertical" style={{ width: '100%' }}>
-                <label style={{ fontWeight: 'bold', color: '#333' }}>
-                  Select Your Career Path:
+                <label style={{ fontWeight: 'bold', color: '#333', fontSize: '16px' }}>
+                  What experience do you currently have?
                 </label>
-                <Select
-                  value={selectedCareer}
-                  onChange={setSelectedCareer}
-                  size="large"
-                  style={{ width: '100%' }}
-                >
-                  <Option value="software-engineer">Software Engineer</Option>
-                  <Option value="cybersecurity">Cybersecurity Specialist</Option>
-                  <Option value="data-science">Data Scientist</Option>
-                </Select>
+                <Input.TextArea
+                  placeholder="Describe your current skills, education, or work experience..."
+                  rows={4}
+                  value={experience}
+                  onChange={(e) => setExperience(e.target.value)}
+                  style={{ fontSize: '14px' }}
+                />
               </Space>
             </Col>
             
-            <Col xs={24} md={16}>
+            <Col xs={24} md={12}>
               <Space direction="vertical" style={{ width: '100%' }}>
-                <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-                  {currentPath.title}
-                </Title>
-                <Paragraph style={{ margin: 0, fontSize: '16px' }}>
-                  {currentPath.description}
-                </Paragraph>
+                <label style={{ fontWeight: 'bold', color: '#333', fontSize: '16px' }}>
+                  What role do you want to achieve?
+                </label>
+                <Input.TextArea
+                  placeholder="Describe your dream job or career goal..."
+                  rows={4}
+                  value={desiredRole}
+                  onChange={(e) => setDesiredRole(e.target.value)}
+                  style={{ fontSize: '14px' }}
+                />
               </Space>
             </Col>
           </Row>
+
+          <div style={{ textAlign: 'center', marginTop: '24px' }}>
+            <Button 
+              type="primary" 
+              size="large"
+              icon={<RocketOutlined />}
+              onClick={() => setShowModal(true)}
+              style={{ height: '50px', fontSize: '16px', padding: '0 32px' }}
+            >
+              Generate My Pathway
+            </Button>
+          </div>
         </Card>
+
+        <Modal
+          title="Generate New Pathway"
+          open={showModal}
+          onOk={() => {
+            console.log('Experience:', experience)
+            console.log('Desired Role:', desiredRole)
+            console.log('Generating new pathway...')
+            setShowModal(false)
+          }}
+          onCancel={() => setShowModal(false)}
+          okText="Yes, Generate Pathway"
+          cancelText="Cancel"
+        >
+          <p>Creating a new pathway will reset your current progress. Are you sure you want to continue?</p>
+        </Modal>
 
         {/* Progress Section */}
         <Card style={{ marginBottom: '24px' }}>
