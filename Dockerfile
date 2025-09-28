@@ -18,10 +18,12 @@ COPY . .
 
 # Create virtual environment and install Python dependencies
 RUN python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install strands-agents strands-agents-tools python-dotenv pymongo
+    . /opt/venv/bin/activate && \
+    pip install --upgrade pip && \
+    pip install strands-agents strands-agents-tools python-dotenv pymongo
 
-# Add virtual environment to PATH
+# Make sure venv is activated by default
+ENV VIRTUAL_ENV=/opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
 # Build frontend
