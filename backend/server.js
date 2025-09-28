@@ -135,6 +135,7 @@ app.post('/api/users/create', createAccountLimiter, async (req, res) => {
           user_email: email,
           hash: userhash,
           salt: salt,
+          friends: [],
           createdAt: newDate,
           updatedAt: newDate
       };
@@ -214,10 +215,10 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
 
       const userhash = crypto.pbkdf2Sync(pw, saltResult?.salt, 100000, 64, 'sha256').toString('base64');
 
-      // Check if a user with the provided username and hashed password exists
-      const id = await db.collection('users').findOne({ user_email: email, hash: userhash }, { projection: { _id: 1 } });
+      // Check if a user with the provided email and hashed password exists
+      const userDoc = await db.collection('users').findOne({ user_email: email, hash: userhash }, { projection: { _id: 1, username: 1 } });
 
-      if (!id) {
+      if (!userDoc) {
         // User not found
         const invalidResponse = {"message": "Invalid credentials"};
         responseLogger(401, invalidResponse, req);
@@ -225,7 +226,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       }
 
       // At this point, credentials have been validated
-      const session = await db.collection('sessions').findOne({ user_id: id});
+      const session = await db.collection('sessions').findOne({ user_id: userDoc._id});
       if (session && session?.expires_at > new Date()) {
         const successResponse = {"message": "User found! Session already established."};
         responseLogger(200, successResponse, req);
@@ -237,8 +238,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min TTL
       const newSession = {
         session_id: sessionValue,
-        user_id: id,
-        username: user,
+        user_id: userDoc._id,
         expires_at: expiresAt
       };
 
@@ -253,7 +253,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       return res.status(201).json(successResponse);
       
   } catch (error) {
-      const errorResponse = {"Error": "Internal server error"};
+      const errorResponse = {"Error": error.message};
       responseLogger(500, errorResponse, req);
       return res.status(500).json(errorResponse);
   }
@@ -302,13 +302,70 @@ app.get('/api/users/protected', authN, (req, res) => {
   return res.status(200).json(successResponse);
 });
 
+// Get current user info
+app.get('/api/users/me', authN, async (req, res) => {
+  try {
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId }, { projection: { _id: 1, user_id: 1 } });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    const user = await db.collection('users').findOne(
+      { _id: session.user_id }, 
+      { projection: { username: 1, user_email: 1, _id: 0 } }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ username: user.username, user_email: user.user_email });
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// Search users by username
+app.get('/api/users/search/:username', authN, async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    if (!username || username.length < 2) {
+      return res.status(400).json({ message: "Username must be at least 2 characters" });
+    }
+
+    const users = await db.collection('users').find(
+      { username: { $regex: username, $options: 'i' } },
+      { projection: { username: 1, user_email: 1, _id: 0 } }
+    ).limit(10).toArray();
+
+    res.json(users.map(user => ({ username: user.username, email: user.user_email })));
+  } catch (error) {
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // Send friend request
 app.post('/friend-request', authN, async (req, res) => {
   try {
     const { senderUsername, senderEmail, receiverUsername, receiverEmail } = req.body;
     
+    // Check if friend request already exists
+    const existingUser = await db.collection('users').findOne({
+      username: receiverUsername,
+      user_email: receiverEmail,
+      'friends.username': senderUsername,
+      'friends.user_email': senderEmail
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: "Friend request already exists" });
+    }
+    
     await db.collection('users').updateOne(
-      { username: receiverUsername, email: receiverEmail },
+      { username: receiverUsername, user_email: receiverEmail },
       { 
         $push: { 
           friends: { 
@@ -339,9 +396,9 @@ app.post('/accept-friend', authN, async (req, res) => {
     await db.collection('users').updateOne(
       { 
         username: accepterUsername, 
-        email: accepterEmail,
+        user_email: accepterEmail,
         'friends.username': requesterUsername,
-        'friends.email': requesterEmail
+        'friends.user_email': requesterEmail
       },
       { 
         $set: { 
@@ -352,12 +409,12 @@ app.post('/accept-friend', authN, async (req, res) => {
     );
 
     await db.collection('users').updateOne(
-      { username: requesterUsername, email: requesterEmail },
+      { username: requesterUsername, user_email: requesterEmail },
       { 
         $push: { 
           friends: { 
             username: accepterUsername, 
-            email: accepterEmail, 
+            user_email: accepterEmail, 
             accepted: true,
             timestamp: new Date()
           } 
@@ -380,7 +437,7 @@ app.post('/accept-friend', authN, async (req, res) => {
 app.get('/friends/:username/:email',authN, async (req, res) => {
   try {
     const { username, email } = req.params;
-    const user = await db.collection('users').findOne({ username, email }, { projection: { friends: 1, _id: 0 } });
+    const user = await db.collection('users').findOne({ username, user_email: email }, { projection: { friends: 1, _id: 0 } });
     responseLogger(200, { friends: user?.friends || [] }, req);
     return res.status(200).json({ friends: user?.friends || [] });
   } catch (error) {
@@ -391,7 +448,7 @@ app.get('/friends/:username/:email',authN, async (req, res) => {
 
 async function triggerWebhook(username, email) {
   try {
-    const user = await db.collection('users').findOne({ username, email }, { projection: { friends: 1, _id: 0 } });
+    const user = await db.collection('users').findOne({ username, user_email: email }, { projection: { friends: 1, _id: 0 } });
     const friendsData = user?.friends || [];
     
     // Send via WebSocket to connected client
@@ -410,13 +467,15 @@ async function triggerWebhook(username, email) {
   }
 }
 
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
 
-// WebSocket server
-const wss = new WebSocketServer({ port: 8080 });
+// WebSocket server on same port as HTTP server
+const wss = new WebSocketServer({ server });
 const clients = new Map();
+
+console.log('WebSocket server running on same port as HTTP server');
 
 wss.on('connection', (ws) => {
   ws.on('message', (message) => {
