@@ -5,12 +5,6 @@ RUN apt-get update && apt-get install -y python3 python3-pip
 
 WORKDIR /app
 
-# Copy Python requirements first
-COPY requirements.txt .
-
-# Install Python dependencies
-RUN pip3 install -r requirements.txt
-
 # Copy package files
 COPY frontend/package*.json ./frontend/
 COPY backend/package*.json ./backend/
@@ -21,6 +15,9 @@ RUN cd backend && npm install
 
 # Copy source code
 COPY . .
+
+# Install Python dependencies from athena folder
+RUN pip3 install -r backend/athena/requirements.txt
 
 # Build frontend
 RUN cd frontend && npm run build
