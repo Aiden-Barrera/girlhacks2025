@@ -4,6 +4,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import { WebSocketServer } from 'ws';
+import { spawn } from 'child_process';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
 import crypto from 'crypto';
@@ -344,6 +345,92 @@ app.get('/api/users/search/:username', authN, async (req, res) => {
     res.json(users.map(user => ({ username: user.username, email: user.user_email })));
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// AI Agent endpoint
+app.post('/api/agent/pathway', authN, async (req, res) => {
+  try {
+    const { message } = req.body;
+    if (!message) {
+      return res.status(400).json({ message: "Message is required" });
+    }
+
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    // Set environment variables for Python script
+    process.env.USER_MESSAGE = message;
+    process.env.SESSION_ID = sessionId;
+    process.env.USER_ID = session.user_id.toString();
+
+    // Execute Python agent
+    const pythonProcess = spawn('./strands-env/bin/python', ['agent.py'], {
+      cwd: './athena',
+      env: { ...process.env, PATH: "/usr/local/opt/python@3.12/libexec/bin:" + process.env.PATH }
+    });
+
+    let output = '';
+    let error = '';
+
+    pythonProcess.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    pythonProcess.stderr.on('data', (data) => {
+      error += data.toString();
+    });
+
+    pythonProcess.on('close', async (code) => {
+      if (code !== 0) {
+        console.error('Python script error:', error);
+        return res.status(500).json({ message: "Agent processing failed", error });
+      }
+
+      try {
+        console.log('Python output:', output);
+        console.log('Python error:', error);
+        
+        // Parse the agent output to get the pathway data
+        const lines = output.trim().split('\n');
+        const lastLine = lines[lines.length - 1];
+        
+        if (lastLine === '201') {
+          res.status(201).json({ message: "Pathway created successfully" });
+        } else {
+          res.status(500).json({ message: "Failed to save pathway", output, error });
+        }
+      } catch (parseError) {
+        console.error('Error parsing agent output:', parseError);
+        res.status(500).json({ message: "Error processing agent response" });
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent endpoint error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Get user pathways
+app.get('/api/pathways', authN, async (req, res) => {
+  try {
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    const pathways = await db.collection('pathways').find({ user_id: session.user_id.toString() }).toArray();
+    res.json({ pathways });
+  } catch (error) {
+    console.error('Get pathways error:', error);
+    res.status(500).json({ message: error.message });
   }
 });
 
