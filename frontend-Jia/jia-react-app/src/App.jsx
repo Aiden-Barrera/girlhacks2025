@@ -15,6 +15,7 @@ import './App.css'
 function App() {
   
   //NavBar is not working :((
+  // The components on top are all for the HomePage.  While the components from Node down are for the MainPage
   return(
     <>
     <Title/>
@@ -24,7 +25,6 @@ function App() {
     <SignUpButton/>
     <ReturningUser/>
     <LogInButton/>
-    <TestBox/>
 
     <Node/>
 
