@@ -406,15 +406,9 @@ app.post('/api/agent/pathway', authN, async (req, res) => {
       console.error('Lambda invocation error:', error);
       res.status(500).json({ message: "Agent processing failed", error: error.message });
     }
-      } catch (parseError) {
-        console.error('Error parsing agent output:', parseError);
-        res.status(500).json({ message: "Error processing agent response" });
-      }
-    });
-
   } catch (error) {
     console.error('Agent endpoint error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
 
