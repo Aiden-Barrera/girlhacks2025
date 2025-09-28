@@ -12,6 +12,7 @@ import crypto from 'crypto';
 dotenv.config();
 
 const app = express();
+app.set('trust proxy', 1); // Trust first proxy (Render)
 const port = 3000;
 
 // MongoDB connection
