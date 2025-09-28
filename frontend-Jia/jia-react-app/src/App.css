@@ -4,11 +4,16 @@
   padding: 2rem;
   text-align: center;
 }
+
+.buttons:hover {
+  filter: drop-shadow(0 0 0.75em #64ff88aa);
+}
+
 .nodes {
   align-items: center;
   color: #0c1e03;
   text-align: left;
-  background-color: rgba(58, 122, 18, 0.8);
+  background-color: rgb(49, 76, 33);
   width: 200;
   border: '2px solid green';
   padding: 50;
@@ -18,7 +23,7 @@
   align-items: center;
   color: #000000;
   text-align: left;
-  padding: 50;
+  padding-left: 2%;
   margin: 20
 }
 .home-page-text {

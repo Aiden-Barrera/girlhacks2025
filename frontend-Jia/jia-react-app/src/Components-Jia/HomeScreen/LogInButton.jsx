@@ -1,7 +1,7 @@
 function LogInButton() {
 
     return(
-        <button type="button">Log-In</button>
+        <button className="buttons" type="button">Log-In</button>
     );
 }
 

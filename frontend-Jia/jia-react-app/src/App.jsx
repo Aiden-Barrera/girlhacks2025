@@ -9,6 +9,8 @@ import LogInButton from "./Components-Jia/HomeScreen/LogInButton.jsx";
 //import NavBar from "./Components-Jia/NavBar.jsx";
 
 import Node from "./Components-Jia/MainPage/Node.jsx";
+
+import AccountButton from "./Components-Jia/AccountButton.jsx";
 import './App.css'
 
 // 'App' component, that will serve as the root
@@ -27,6 +29,7 @@ function App() {
     <LogInButton/>
 
     <Node/>
+    <AccountButton/>
 
     </>
   );
