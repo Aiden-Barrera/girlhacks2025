@@ -5,7 +5,7 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import { WebSocketServer } from 'ws';
-import { spawn } from 'child_process';
+import { spawn, execSync } from 'child_process';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
 import crypto from 'crypto';
@@ -375,7 +375,15 @@ app.post('/api/agent/pathway', authN, async (req, res) => {
     process.env.USER_ID = session.user_id.toString();
 
     // Execute Python agent
-    const pythonProcess = spawn('/opt/venv/bin/python', ['agent.py'], {
+    // Find Python path dynamically
+    let pythonPath;
+    try {
+      pythonPath = execSync('which python3', { encoding: 'utf8' }).trim();
+    } catch {
+      pythonPath = 'python3'; // fallback
+    }
+    
+    const pythonProcess = spawn(pythonPath, ['agent.py'], {
       cwd: './athena',
       env: { ...process.env, PATH: "/usr/local/opt/python@3.12/libexec/bin:" + process.env.PATH }
     });
