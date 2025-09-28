@@ -770,6 +770,6 @@ const __dirname = path.dirname(new URL(import.meta.url).pathname);
 app.use(express.static(path.join(__dirname, '../frontend/dist')));
 
 // Catch-all handler for frontend routes
-app.get('*', (req, res) => {
+app.get('/*', (req, res) => {
   res.sendFile(path.join(__dirname, '../frontend/dist/index.html'));
 });
