@@ -16,8 +16,9 @@ RUN cd backend && npm install
 # Copy source code
 COPY . .
 
-# Install Python dependencies from athena folder
-RUN pip3 install -r backend/athena/requirements.txt
+# Install Python dependencies
+RUN pip3 install --upgrade pip && \
+    pip3 install strands-agents strands-agents-tools python-dotenv pymongo
 
 # Build frontend
 RUN cd frontend && npm run build
