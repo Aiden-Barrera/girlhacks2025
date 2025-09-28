@@ -3,6 +3,7 @@ import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
+import { WebSocketServer } from 'ws';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
 import crypto from 'crypto';
@@ -291,6 +292,7 @@ async function authN(req, res, next) {
   }
 };
 
+
 // Protected endpoint
 app.get('/api/users/protected', authN, (req, res) => {
   const successResponse = {"message": "Welcome to the users API!"};
@@ -298,6 +300,145 @@ app.get('/api/users/protected', authN, (req, res) => {
   return res.status(200).json(successResponse);
 });
 
+// Send friend request
+app.post('/friend-request', async (req, res) => {
+  try {
+    const { senderUsername, senderEmail, receiverUsername, receiverEmail } = req.body;
+    
+    await db.collection('users').updateOne(
+      { username: receiverUsername, email: receiverEmail },
+      { 
+        $push: { 
+          friends: { 
+            username: senderUsername, 
+            email: senderEmail, 
+            accepted: false,
+            timestamp: new Date()
+          } 
+        },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    triggerWebhook(receiverUsername, receiverEmail);
+    res.json({ success: true, message: 'Friend request sent' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Accept friend request
+app.post('/accept-friend', async (req, res) => {
+  try {
+    const { accepterUsername, accepterEmail, requesterUsername, requesterEmail } = req.body;
+    
+    await db.collection('users').updateOne(
+      { 
+        username: accepterUsername, 
+        email: accepterEmail,
+        'friends.username': requesterUsername,
+        'friends.email': requesterEmail
+      },
+      { 
+        $set: { 
+          'friends.$.accepted': true,
+          updatedAt: new Date()
+        } 
+      }
+    );
+
+    await db.collection('users').updateOne(
+      { username: requesterUsername, email: requesterEmail },
+      { 
+        $push: { 
+          friends: { 
+            username: accepterUsername, 
+            email: accepterEmail, 
+            accepted: true,
+            timestamp: new Date()
+          } 
+        },
+        $set: { updatedAt: new Date() }
+      }
+    );
+
+    triggerWebhook(accepterUsername, accepterEmail);
+    triggerWebhook(requesterUsername, requesterEmail);
+    res.json({ success: true, message: 'Friend request accepted' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get friends list
+app.get('/friends/:username/:email', async (req, res) => {
+  try {
+    const { username, email } = req.params;
+    const user = await db.collection('users').findOne({ username, email }, { projection: { friends: 1, _id: 0 } });
+    res.json({ friends: user?.friends || [] });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Webhook endpoint
+app.post('/webhook/friends-update', (req, res) => {
+  const { username, email, friendsData } = req.body;
+  console.log(`Webhook: Sending updated friends data to ${username} (${email})`);
+  
+  // In real implementation, this would push to WebSocket, SSE, or frontend polling endpoint
+  // For now, we'll log the data that would be sent to frontend
+  console.log('Updated friends data:', friendsData);
+  
+  res.json({ received: true, friendsData });
+});
+
+async function triggerWebhook(username, email) {
+  try {
+    const user = await db.collection('users').findOne({ username, email }, { projection: { friends: 1, _id: 0 } });
+    const friendsData = user?.friends || [];
+    
+    // Send via WebSocket to connected client
+    const key = `${username}:${email}`;
+    const client = clients.get(key);
+    
+    if (client && client.readyState === client.OPEN) {
+      client.send(JSON.stringify({
+        type: 'friends_update',
+        friendsData
+      }));
+      console.log(`WebSocket update sent to ${username}`);
+    }
+  } catch (error) {
+    console.log('WebSocket trigger error:', error.message);
+  }
+}
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
+});
+
+// WebSocket server
+const wss = new WebSocketServer({ port: 8080 });
+const clients = new Map();
+
+wss.on('connection', (ws) => {
+  ws.on('message', (message) => {
+    const data = JSON.parse(message);
+    if (data.type === 'register') {
+      const key = `${data.username}:${data.email}`;
+      clients.set(key, ws);
+      console.log(`WebSocket client registered: ${key}`);
+    }
+  });
+
+  ws.on('close', () => {
+    for (const [key, client] of clients.entries()) {
+      if (client === ws) {
+        clients.delete(key);
+        console.log(`WebSocket client disconnected: ${key}`);
+        break;
+      }
+    }
+  });
 });
