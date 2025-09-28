@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Card, Progress, Button, Typography, Row, Col, Space, Input, Modal } from 'antd'
+import { Card, Progress, Button, Typography, Row, Col, Space, Input, Modal, message, Checkbox, List } from 'antd'
 import { RocketOutlined, SaveOutlined, PlayCircleOutlined } from '@ant-design/icons'
 import mermaid from 'mermaid'
 
@@ -7,82 +7,41 @@ const { Title, Paragraph } = Typography
 
 function PathwayPage() {
   const mermaidRef = useRef(null)
-  const [selectedCareer, setSelectedCareer] = useState('software-engineer')
+  const [pathways, setPathways] = useState([])
+  const [currentPathway, setCurrentPathway] = useState(null)
   const [showModal, setShowModal] = useState(false)
+  const [selectedLevel, setSelectedLevel] = useState(null)
   const [experience, setExperience] = useState('')
   const [desiredRole, setDesiredRole] = useState('')
+  const [loading, setLoading] = useState(false)
 
-  const careerPaths = {
-    'software-engineer': {
-      title: 'Software Engineer Pathway',
-      description: 'Complete roadmap to becoming a software engineer',
-      progress: 25,
-      diagram: `
-        graph TD
-          A[Start: Programming Basics] --> B[Learn a Programming Language]
-          B --> C[Data Structures & Algorithms]
-          C --> D[Version Control - Git]
-          D --> E[Web Development Basics]
-          E --> F[Database Fundamentals]
-          F --> G[Framework Learning]
-          G --> H[Build Projects]
-          H --> I[System Design]
-          I --> J[Job Ready!]
-          
-          B --> B1[Python/JavaScript/Java]
-          E --> E1[HTML/CSS/JavaScript]
-          F --> F1[SQL/NoSQL]
-          G --> G1[React/Node.js/Spring]
-          H --> H1[Portfolio Projects]
-      `
-    },
-    'cybersecurity': {
-      title: 'Cybersecurity Specialist Pathway',
-      description: 'Your journey to cybersecurity expertise',
-      progress: 15,
-      diagram: `
-        graph TD
-          A[Start: IT Fundamentals] --> B[Networking Basics]
-          B --> C[Operating Systems]
-          C --> D[Security Fundamentals]
-          D --> E[Risk Assessment]
-          E --> F[Incident Response]
-          F --> G[Security Tools]
-          G --> H[Certifications]
-          H --> I[Specialization]
-          I --> J[Security Expert!]
-          
-          B --> B1[TCP/IP, OSI Model]
-          C --> C1[Linux/Windows]
-          D --> D1[CIA Triad, Threats]
-          G --> G1[Wireshark, Nmap]
-          H --> H1[Security+, CISSP]
-          I --> I1[Penetration Testing/Forensics]
-      `
-    },
-    'data-science': {
-      title: 'Data Science Pathway',
-      description: 'Transform data into insights',
-      progress: 35,
-      diagram: `
-        graph TD
-          A[Start: Math & Statistics] --> B[Programming - Python/R]
-          B --> C[Data Analysis Libraries]
-          C --> D[Data Visualization]
-          D --> E[Machine Learning]
-          E --> F[Deep Learning]
-          F --> G[Big Data Tools]
-          G --> H[Portfolio Projects]
-          H --> I[Data Scientist!]
-          
-          A --> A1[Linear Algebra, Statistics]
-          C --> C1[Pandas, NumPy]
-          D --> D1[Matplotlib, Seaborn]
-          E --> E1[Scikit-learn]
-          F --> F1[TensorFlow, PyTorch]
-          G --> G1[Spark, Hadoop]
-      `
+  useEffect(() => {
+    fetchPathways()
+  }, [])
+
+  const fetchPathways = async () => {
+    try {
+      const response = await fetch('/api/pathways', {
+        credentials: 'include'
+      })
+      const data = await response.json()
+      
+      if (response.ok) {
+        setPathways(data.pathways)
+        if (data.pathways.length > 0) {
+          setCurrentPathway(data.pathways[0]) // Use the first pathway
+        }
+      } else {
+        message.error('Failed to fetch pathways')
+      }
+    } catch (error) {
+      console.error('Error fetching pathways:', error)
+      message.error('Error loading pathways')
     }
+  }
+
+  const parseMermaidFromLLM = (llmOutput) => {
+    return llmOutput.replace(/\\n/g, '\n').replace(/\\"/g, '"').trim()
   }
 
   useEffect(() => {
@@ -90,16 +49,35 @@ function PathwayPage() {
       startOnLoad: false,
       theme: 'default',
       flowchart: {
-        useMaxWidth: true,
+        useMaxWidth: false,
         htmlLabels: true
       }
     })
     
     const renderDiagram = async () => {
-      if (mermaidRef.current) {
+      if (mermaidRef.current && currentPathway?.mermaid) {
         try {
-          const { svg } = await mermaid.render('mermaid-diagram', careerPaths[selectedCareer].diagram)
+          const parsedMermaid = parseMermaidFromLLM(currentPathway.mermaid)
+          const { svg } = await mermaid.render('mermaid-diagram', parsedMermaid)
           mermaidRef.current.innerHTML = svg
+          
+          // Add click listeners to nodes
+          setTimeout(() => {
+            const nodes = mermaidRef.current.querySelectorAll('g.node')
+            console.log('Found nodes:', nodes.length)
+            nodes.forEach((node, index) => {
+              node.style.cursor = 'pointer'
+              node.addEventListener('click', (e) => {
+                e.preventDefault()
+                console.log('Node clicked, index:', index)
+                const level = currentPathway.levels?.[index]
+                if (level) {
+                  console.log('Setting selected level:', level.levelNumber)
+                  setSelectedLevel(level)
+                }
+              })
+            })
+          }, 500)
         } catch (error) {
           console.error('Mermaid rendering error:', error)
           mermaidRef.current.innerHTML = '<p>Error loading diagram</p>'
@@ -107,10 +85,49 @@ function PathwayPage() {
       }
     }
     
-    renderDiagram()
-  }, [selectedCareer])
+    if (currentPathway) {
+      renderDiagram()
+    }
+  }, [currentPathway])
 
-  const currentPath = careerPaths[selectedCareer]
+  const generatePathway = async () => {
+    if (!experience.trim() || !desiredRole.trim()) {
+      message.error('Please fill in both fields')
+      return
+    }
+
+    setLoading(true)
+    try {
+      const response = await fetch('/api/agent/pathway', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          message: `Current experience: ${experience}. Desired role: ${desiredRole}. Please create a career pathway.`
+        })
+      })
+
+      const data = await response.json()
+      
+      if (response.ok) {
+        message.success('Pathway generated successfully!')
+        setShowModal(false)
+        setExperience('')
+        setDesiredRole('')
+        // Refresh pathways
+        await fetchPathways()
+      } else {
+        message.error(data.message || 'Failed to generate pathway')
+      }
+    } catch (error) {
+      console.error('Error generating pathway:', error)
+      message.error('Error generating pathway')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   return (
     <div style={{ padding: '24px', backgroundColor: '#f5f5f5', minHeight: '100vh' }}>
@@ -178,81 +195,81 @@ function PathwayPage() {
         <Modal
           title="Generate New Pathway"
           open={showModal}
-          onOk={() => {
-            console.log('Experience:', experience)
-            console.log('Desired Role:', desiredRole)
-            console.log('Generating new pathway...')
-            setShowModal(false)
-          }}
+          onOk={generatePathway}
           onCancel={() => setShowModal(false)}
           okText="Yes, Generate Pathway"
           cancelText="Cancel"
+          confirmLoading={loading}
         >
-          <p>Creating a new pathway will reset your current progress. Are you sure you want to continue?</p>
+          <p>Creating a new pathway will add to your existing pathways. Are you sure you want to continue?</p>
         </Modal>
 
-        {/* Progress Section */}
-        <Card style={{ marginBottom: '24px' }}>
-          <Row gutter={[24, 24]} align="middle">
-            <Col xs={24} md={16}>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Title level={4} style={{ margin: 0 }}>Your Progress</Title>
-                <Progress 
-                  percent={currentPath.progress} 
-                  strokeColor={{
-                    '0%': '#108ee9',
-                    '100%': '#87d068',
-                  }}
-                  size="large"
-                />
-                <Paragraph style={{ margin: 0, color: '#666' }}>
-                  You're {currentPath.progress}% through your {currentPath.title.toLowerCase()} journey!
-                </Paragraph>
-              </Space>
-            </Col>
-            
-            <Col xs={24} md={8}>
-              <Space direction="vertical" style={{ width: '100%' }}>
-                <Button 
-                  type="primary" 
-                  icon={<PlayCircleOutlined />} 
-                  size="large"
-                  block
-                >
-                  Continue Learning
-                </Button>
-                <Button 
-                  icon={<SaveOutlined />} 
-                  size="large"
-                  block
-                >
-                  Save Progress
-                </Button>
-              </Space>
-            </Col>
-          </Row>
-        </Card>
+        {/* Level Steps Display */}
+        {selectedLevel && (
+          <Card 
+            title={`${selectedLevel.title} - ${selectedLevel.duration}`}
+            style={{ marginBottom: '24px', border: '2px solid #1890ff' }}
+            extra={<Button onClick={() => setSelectedLevel(null)}>Close</Button>}
+          >
+            {selectedLevel.steps?.map((step, stepIndex) => (
+              <Card 
+                key={stepIndex}
+                type="inner" 
+                title={step.title}
+                style={{ marginBottom: '16px' }}
+              >
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {step.tasks?.map((task, taskIndex) => (
+                    <Checkbox 
+                      key={taskIndex}
+                      checked={task.status === 'completed'}
+                      onChange={(e) => {
+                        console.log('Task toggled:', task.title, e.target.checked)
+                      }}
+                    >
+                      {task.title}
+                    </Checkbox>
+                  ))}
+                </Space>
+              </Card>
+            ))}
+          </Card>
+        )}
 
         {/* Pathway Visualization */}
-        <Card 
-          title={
-            <Space>
-              <RocketOutlined />
-              <span>Learning Path Visualization</span>
-            </Space>
-          }
-          style={{ marginBottom: '24px' }}
-        >
-          <div style={{ 
-            overflow: 'auto', 
-            padding: '20px',
-            backgroundColor: '#fafafa',
-            borderRadius: '8px',
-            border: '1px solid #f0f0f0'
-          }}>
-            <div ref={mermaidRef} style={{ minHeight: '400px', textAlign: 'center' }}></div>
-          </div>
-        </Card>
+        {currentPathway && (
+          <Card 
+            title={
+              <Space>
+                <RocketOutlined />
+                <span>Your Career Pathway</span>
+              </Space>
+            }
+            style={{ marginBottom: '24px' }}
+          >
+            <div style={{ 
+              overflow: 'auto', 
+              padding: '20px',
+              backgroundColor: '#fafafa',
+              borderRadius: '8px',
+              border: '1px solid #f0f0f0',
+              textAlign: 'center'
+            }}>
+              <div ref={mermaidRef} style={{ minHeight: '400px', minWidth: '800px' }}></div>
+              <Title level={4} style={{ marginTop: '16px', color: '#1890ff' }}>
+                {currentPathway?.title}
+              </Title>
+            </div>
+          </Card>
+        )}
+
+        {/* No pathways message */}
+        {pathways.length === 0 && (
+          <Card style={{ textAlign: 'center', marginBottom: '24px' }}>
+            <Title level={4}>No Pathways Yet</Title>
+            <Paragraph>Generate your first career pathway using the form above!</Paragraph>
+          </Card>
+        )}
 
         {/* Action Buttons */}
         <div style={{ textAlign: 'center' }}>
@@ -261,8 +278,9 @@ function PathwayPage() {
               size="large" 
               icon={<SaveOutlined />}
               style={{ height: '50px', fontSize: '16px', padding: '0 32px' }}
+              onClick={fetchPathways}
             >
-              Save Pathway
+              Refresh Pathways
             </Button>
           </Space>
         </div>
