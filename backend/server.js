@@ -238,6 +238,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       const newSession = {
         session_id: sessionValue,
         user_id: id,
+        username: user,
         expires_at: expiresAt
       };
 
@@ -376,27 +377,17 @@ app.post('/accept-friend', authN, async (req, res) => {
 });
 
 // Get friends list
-app.get('/friends/:username/:email', async (req, res) => {
+app.get('/friends/:username/:email',authN, async (req, res) => {
   try {
     const { username, email } = req.params;
     const user = await db.collection('users').findOne({ username, email }, { projection: { friends: 1, _id: 0 } });
-    res.json({ friends: user?.friends || [] });
+    responseLogger(200, { friends: user?.friends || [] }, req);
+    return res.status(200).json({ friends: user?.friends || [] });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Webhook endpoint
-app.post('/webhook/friends-update', (req, res) => {
-  const { username, email, friendsData } = req.body;
-  console.log(`Webhook: Sending updated friends data to ${username} (${email})`);
-  
-  // In real implementation, this would push to WebSocket, SSE, or frontend polling endpoint
-  // For now, we'll log the data that would be sent to frontend
-  console.log('Updated friends data:', friendsData);
-  
-  res.json({ received: true, friendsData });
-});
 
 async function triggerWebhook(username, email) {
   try {
