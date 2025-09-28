@@ -339,10 +339,14 @@ app.get('/api/users/search/:username', authN, async (req, res) => {
 
     const users = await db.collection('users').find(
       { username: { $regex: username, $options: 'i' } },
-      { projection: { username: 1, user_email: 1, _id: 0 } }
+      { projection: { username: 1, user_email: 1, score: 1, _id: 0 } }
     ).limit(10).toArray();
 
-    res.json(users.map(user => ({ username: user.username, email: user.user_email })));
+    res.json(users.map(user => ({ 
+      username: user.username, 
+      email: user.user_email,
+      score: user.score || 0
+    })));
   } catch (error) {
     res.status(500).json({ error: "Internal server error" });
   }
@@ -430,6 +434,166 @@ app.get('/api/pathways', authN, async (req, res) => {
     res.json({ pathways });
   } catch (error) {
     console.error('Get pathways error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update task status
+app.patch('/api/pathways/task', authN, async (req, res) => {
+  try {
+    const { levelNumber, stepNumber, taskId, status } = req.body;
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    const result = await db.collection('pathways').updateOne(
+      { 
+        user_id: session.user_id.toString(),
+        "pathway.levels.levelNumber": levelNumber,
+        "pathway.levels.steps.stepNumber": stepNumber,
+        "pathway.levels.steps.tasks.id": taskId
+      },
+      { 
+        $set: { "pathway.levels.$[level].steps.$[step].tasks.$[task].status": status }
+      },
+      {
+        arrayFilters: [
+          { "level.levelNumber": levelNumber },
+          { "step.stepNumber": stepNumber },
+          { "task.id": taskId }
+        ]
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json({ message: "Task status updated successfully" });
+    } else {
+      res.status(404).json({ message: "Task not found" });
+    }
+  } catch (error) {
+    console.error('Update task error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update step status
+app.patch('/api/pathways/step', authN, async (req, res) => {
+  try {
+    const { levelNumber, stepNumber, status } = req.body;
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    const result = await db.collection('pathways').updateOne(
+      { 
+        user_id: session.user_id.toString(),
+        "pathway.levels.levelNumber": levelNumber,
+        "pathway.levels.steps.stepNumber": stepNumber
+      },
+      { 
+        $set: { "pathway.levels.$[level].steps.$[step].status": status }
+      },
+      {
+        arrayFilters: [
+          { "level.levelNumber": levelNumber },
+          { "step.stepNumber": stepNumber }
+        ]
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json({ message: "Step status updated successfully" });
+    } else {
+      res.status(404).json({ message: "Step not found" });
+    }
+  } catch (error) {
+    console.error('Update step error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update level status
+app.patch('/api/pathways/level', authN, async (req, res) => {
+  try {
+    const { levelNumber, status } = req.body;
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    // Update current level to completed and next level to in-progress
+    const updates = [
+      {
+        updateOne: {
+          filter: { 
+            user_id: session.user_id.toString(),
+            "pathway.levels.levelNumber": levelNumber
+          },
+          update: { 
+            $set: { "pathway.levels.$.status": "completed" }
+          }
+        }
+      }
+    ];
+
+    // If there's a next level, set it to in-progress
+    const nextLevelNumber = levelNumber + 1;
+    updates.push({
+      updateOne: {
+        filter: { 
+          user_id: session.user_id.toString(),
+          "pathway.levels.levelNumber": nextLevelNumber
+        },
+        update: { 
+          $set: { "pathway.levels.$.status": "in-progress" }
+        }
+      }
+    });
+
+    await db.collection('pathways').bulkWrite(updates);
+    res.json({ message: "Level status updated successfully" });
+  } catch (error) {
+    console.error('Update level error:', error);
+    res.status(500).json({ message: error.message });
+  }
+});
+
+// Update user score
+app.patch('/api/user/score', authN, async (req, res) => {
+  try {
+    const { score } = req.body;
+    const sessionId = req.cookies.session_id;
+    const session = await db.collection('sessions').findOne({ session_id: sessionId });
+    
+    if (!session) {
+      return res.status(401).json({ message: "Session not found" });
+    }
+
+    const user = await db.collection('users').findOne({ _id: session.user_id });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const result = await db.collection('users').updateOne(
+      { email: user.email },
+      { $set: { score: score } }
+    );
+
+    if (result.modifiedCount > 0) {
+      res.json({ message: "Score updated successfully" });
+    } else {
+      res.status(404).json({ message: "User not found" });
+    }
+  } catch (error) {
+    console.error('Update score error:', error);
     res.status(500).json({ message: error.message });
   }
 });
@@ -525,8 +689,23 @@ app.get('/friends/:username/:email',authN, async (req, res) => {
   try {
     const { username, email } = req.params;
     const user = await db.collection('users').findOne({ username, user_email: email }, { projection: { friends: 1, _id: 0 } });
-    responseLogger(200, { friends: user?.friends || [] }, req);
-    return res.status(200).json({ friends: user?.friends || [] });
+    
+    // Get scores for each friend
+    const friendsWithScores = await Promise.all(
+      (user?.friends || []).map(async (friend) => {
+        const friendUser = await db.collection('users').findOne(
+          { user_email: friend.email },
+          { projection: { score: 1, _id: 0 } }
+        );
+        return {
+          ...friend,
+          score: friendUser?.score || 0
+        };
+      })
+    );
+    
+    responseLogger(200, { friends: friendsWithScores }, req);
+    return res.status(200).json({ friends: friendsWithScores });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
