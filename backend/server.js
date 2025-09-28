@@ -87,6 +87,14 @@ app.post('/api/users/create', createAccountLimiter, async (req, res) => {
       return res.status(400).json(invalidResponse);
   }
 
+  // Check for duplicate username
+  const existingUser = await db.collection('users').findOne({ user_email: req.body.email });
+  if (existingUser) {
+      const invalidResponse = {"message": "Email already exists"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
   const user = req.body.username;
   const pw = req.body.pw;
   const email = req.body.email;
@@ -164,30 +172,24 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       return res.status(400).json(invalidResponse);
   }
   
-  if (!req.body.username || !req.body.pw || !req.body.email) {
-      const invalidResponse = {"message": "Username, email, and password are required"};
+  if (!req.body.pw || !req.body.email) {
+      const invalidResponse = {"message": "Email and password are required"};
       return res.status(400).json(invalidResponse);
   }
 
-  const allowedFields = ['username', 'pw', 'email'];
+  const allowedFields = ['pw', 'email'];
   const extraFields = Object.keys(req.body).filter(field => !allowedFields.includes(field));
   if (extraFields?.length > 0) {
-      const invalidResponse = {"message": "Only username, email, and pw fields are allowed"};
+      const invalidResponse = {"message": "Only email and pw fields are allowed"};
       responseLogger(400, invalidResponse, req);
       return res.status(400).json(invalidResponse);
   }
 
-  const user = req.body.username;
+  const email = req.body.email;
   const pw = req.body.pw;
 
-  // Validate username
-  if (!validateUsername(user)) {
-    const invalidResponse = {"message": "Username must be 3-30 characters, alphanumeric with ._- only"};
-    responseLogger(400, invalidResponse, req);
-    return res.status(400).json(invalidResponse);
-  }
 
-  if (!validateEmail(req.body.email)) {
+  if (!validateEmail(email)) {
       const invalidResponse = {"message": "Invalid email format"};
       responseLogger(400, invalidResponse, req);
       return res.status(400).json(invalidResponse);
@@ -202,7 +204,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
 
   try {
       // Fetch the user's salt from the DB
-      const saltResult = await db.collection('users').findOne({ username: user }, { projection: { salt: 1, _id: 0 } });
+      const saltResult = await db.collection('users').findOne({ user_email: email }, { projection: { salt: 1, _id: 0 } });
       if (!saltResult) {
         // User not found
         const invalidResponse = {"message": "Invalid credentials"};
@@ -213,7 +215,7 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       const userhash = crypto.pbkdf2Sync(pw, saltResult?.salt, 100000, 64, 'sha256').toString('base64');
 
       // Check if a user with the provided username and hashed password exists
-      const id = await db.collection('users').findOne({ username: user, hash: userhash }, { projection: { _id: 1 } });
+      const id = await db.collection('users').findOne({ user_email: email, hash: userhash }, { projection: { _id: 1 } });
 
       if (!id) {
         // User not found
@@ -236,7 +238,6 @@ app.post('/api/users/login', loginLimiter, async (req, res) => {
       const newSession = {
         session_id: sessionValue,
         user_id: id,
-        username: user,
         expires_at: expiresAt
       };
 
