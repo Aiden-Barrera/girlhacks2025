@@ -301,7 +301,7 @@ app.get('/api/users/protected', authN, (req, res) => {
 });
 
 // Send friend request
-app.post('/friend-request', async (req, res) => {
+app.post('/friend-request', authN, async (req, res) => {
   try {
     const { senderUsername, senderEmail, receiverUsername, receiverEmail } = req.body;
     
@@ -321,14 +321,16 @@ app.post('/friend-request', async (req, res) => {
     );
 
     triggerWebhook(receiverUsername, receiverEmail);
-    res.json({ success: true, message: 'Friend request sent' });
+    responseLogger(200, { success: true, message: 'Friend request sent' }, req);
+    return res.status(200).json({ success: true, message: 'Friend request sent' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    responseLogger(500, { error: "Internal server error" }, req);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
 // Accept friend request
-app.post('/accept-friend', async (req, res) => {
+app.post('/accept-friend', authN, async (req, res) => {
   try {
     const { accepterUsername, accepterEmail, requesterUsername, requesterEmail } = req.body;
     
@@ -364,9 +366,11 @@ app.post('/accept-friend', async (req, res) => {
 
     triggerWebhook(accepterUsername, accepterEmail);
     triggerWebhook(requesterUsername, requesterEmail);
-    res.json({ success: true, message: 'Friend request accepted' });
+    responseLogger(200, { success: true, message: 'Friend request accepted' }, req);
+    return res.status(200).json({ success: true, message: 'Friend request accepted' });
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    responseLogger(500, { error: "Internal server error" }, req);
+    return res.status(500).json({ error: "Internal server error" });
   }
 });
 
