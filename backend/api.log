@@ -14,3 +14,13 @@
 {"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:03.027Z"}
 {"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/test","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:09.148Z"}
 {"level":"info","message":{"IP":"::ffff:127.0.0.1","URL":"/favicon.ico","browser":"Firefox","device":"Apple Macintosh","httpMethod":"GET","os":"macOS 10.15","payload":null},"timestamp":"2025-09-27T23:10:09.207Z"}
+{"level":"info","message":{"IP":"::1","URL":"/users","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-28T00:55:47.009Z"}
+{"level":"info","message":{"IP":"::1","URL":"/users","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-28T00:58:07.318Z"}
+{"level":"info","message":{"IP":"::1","URL":"/users","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-28T00:58:26.236Z"}
+{"level":"info","message":{"IP":"::1","URL":"/users","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-28T00:58:50.066Z"}
+{"level":"info","message":{"IP":"::1","URL":"/users","browser":"Unknown","device":"Unknown","httpMethod":"GET","os":"Unknown","payload":null},"timestamp":"2025-09-28T00:59:37.116Z"}
+{"level":"info","message":{"IP":"::1","URL":"/friend-request","browser":"Unknown","device":"Unknown","httpMethod":"POST","os":"Unknown","payload":null},"timestamp":"2025-09-28T01:20:30.039Z"}
+{"level":"info","message":{"IP":"::1","URL":"/webhook/friends-update","browser":"Unknown","device":"Unknown","httpMethod":"POST","os":"Unknown","payload":null},"timestamp":"2025-09-28T01:20:30.245Z"}
+{"level":"info","message":{"IP":"::1","URL":"/accept-friend","browser":"Unknown","device":"Unknown","httpMethod":"POST","os":"Unknown","payload":null},"timestamp":"2025-09-28T01:23:55.050Z"}
+{"level":"info","message":{"IP":"::1","URL":"/webhook/friends-update","browser":"Unknown","device":"Unknown","httpMethod":"POST","os":"Unknown","payload":null},"timestamp":"2025-09-28T01:23:55.102Z"}
+{"level":"info","message":{"IP":"::1","URL":"/webhook/friends-update","browser":"Unknown","device":"Unknown","httpMethod":"POST","os":"Unknown","payload":null},"timestamp":"2025-09-28T01:23:55.108Z"}
