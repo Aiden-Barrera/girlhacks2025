@@ -374,7 +374,7 @@ app.post('/api/agent/pathway', authN, async (req, res) => {
     process.env.USER_ID = session.user_id.toString();
 
     // Execute Python agent
-    const pythonProcess = spawn('./strands-env/bin/python', ['agent.py'], {
+    const pythonProcess = spawn('python3', ['agent.py'], {
       cwd: './athena',
       env: { ...process.env, PATH: "/usr/local/opt/python@3.12/libexec/bin:" + process.env.PATH }
     });
