@@ -5,6 +5,7 @@ import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
+import crypto from 'crypto';
 dotenv.config();
 
 const app = express();
@@ -20,7 +21,7 @@ MongoClient.connect(mongoUrl)
     console.log('Connected to MongoDB');
     db = client.db(dbName);
   })
-  .catch(error => console.error('MongoDB connection error:', error));
+  .catch(error => console.error('Error connecting to MongoDB:', error)); // HANDLE THIS FOR SENSITIVITY
 
 const limiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
@@ -35,15 +36,266 @@ app.use(requestLogger); // Log all api requests
 app.use(cookieParser());
 app.use(express.json({ limit: '1mb' })); // Limit request body size to 1MB to tame payload sizes for DoS prevention
 
+function validateUsername(username) {
+  // Allow alphanumeric, underscore, hyphen, dot (3-30 chars)
+  const usernameRegex = /^[a-zA-Z0-9._-]{3,30}$/;
+  return usernameRegex.test(username);
+}
 
-app.get('/', (req, res) => {
-  return res.status(200).json({"Welcome":"Hello World!"});
+function validatePassword(password) {
+  // Min 8 chars, at least one letter, one number, one special char
+  const passwordRegex = /^(?=.*[a-zA-Z])(?=.*\d)(?=.*[@$!%*?&#])[A-Za-z\d@$!%*?&#]{8,128}$/;
+  return passwordRegex.test(password);
+}
+
+function validateEmail(email) {
+  // Simple email regex
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);  
+}
+
+const createAccountLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 6, // limit each IP to 6 account creation attempts per minute
+  message: 'Too many accounts created from this IP, please try again after 10 seconds.',
+  skipSuccessfulRequests: true, // Don't count successful requests
 });
 
-app.get('/test', async (req, res) => {
-  const users = await db.collection('users').find().toArray();
+// authN Workflow
 
-  return res.status(200).json({"pathway": users});
+// 1. User creation endpoint
+// - If user tries to create invalid credentials, no access to DB
+// - User creates valid credentials, server will hash user PW and store creds in server side db
+
+app.post('/api/users/create', createAccountLimiter, async (req, res) => {
+  if (!req.body) {
+      const invalidResponse = {"message": "Request body is required"};
+      return res.status(400).json(invalidResponse);
+  }
+  
+  if (!req.body.username || !req.body.pw || !req.body.email) {
+      const invalidResponse = {"message": "Username, email, and password are required"};
+      return res.status(400).json(invalidResponse);
+  }
+
+  const allowedFields = ['username', 'pw', 'email'];
+  const extraFields = Object.keys(req.body).filter(field => !allowedFields.includes(field));
+  if (extraFields?.length > 0) {
+      const invalidResponse = {"message": "Only username, email, and pw fields are allowed"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  const user = req.body.username;
+  const pw = req.body.pw;
+  const email = req.body.email;
+
+  // Validate username
+  if (!validateUsername(user)) {
+      const invalidResponse = {"message": "Username must be 3-30 characters, alphanumeric with ._- only"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+  
+  // Validate email
+  if (!validateEmail(req.body.email)) {
+      const invalidResponse = {"message": "Invalid email format"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  // Validate password
+  if (!validatePassword(pw)) {
+      const invalidResponse = {"message": "Password must be 8+ characters with letter, number, and special character [@,$,!,%,*,?,&,#] "};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  // Hash the PW and store the new user in the DB    
+  try {
+      // Generate salt as base64 (44 characters)
+      const salt = crypto.randomBytes(32).toString('base64');
+      
+      // Create hash as base64 (88 characters)
+      const userhash = crypto.pbkdf2Sync(pw, salt, 100000, 64, 'sha256').toString('base64');
+      
+      const newDate = new Date();
+
+      const newUser = {
+          username: user,
+          user_email: email,
+          hash: userhash,
+          salt: salt,
+          createdAt: newDate,
+          updatedAt: newDate
+      };
+      await db.collection('users').insertOne(newUser);
+      const successResponse = {"message": "User created successfully"};
+      responseLogger(201, successResponse, req);
+      return res.status(201).json(successResponse);
+
+  } catch (error) {
+      const errorResponse = {"Error": "Internal server error"};
+      responseLogger(500, errorResponse, req);
+      return res.status(500).json(errorResponse);
+  }
+});
+
+const loginLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute window
+  max: 60, // limit each IP to 6 account creation attempts per minute
+  message: 'Too many attempts from this IP, please try again.',
+  skipSuccessfulRequests: true, // Don't count successful requests
+});
+
+// 2. User login endpoint
+// - User logs in with credentials
+// - If user provides no creds, no access
+// - Server will hash provided PW and check provided creds against creds in DB
+// - If creds don't exist in DB, no access
+// - If user supplies valid credentials, server creates a session object in the DB with 
+// data about the user, TTL, and generates a random value for a session id,
+// - the endpoint sends the session value back to the user in the login response 
+// in the form of a session_id cookie (use 'set-cookie' in the HTTP response)
+app.post('/api/users/login', loginLimiter, async (req, res) => {
+  if (!req.body) {
+      const invalidResponse = {"message": "Request body is required"};
+      return res.status(400).json(invalidResponse);
+  }
+  
+  if (!req.body.username || !req.body.pw || !req.body.email) {
+      const invalidResponse = {"message": "Username, email, and password are required"};
+      return res.status(400).json(invalidResponse);
+  }
+
+  const allowedFields = ['username', 'pw', 'email'];
+  const extraFields = Object.keys(req.body).filter(field => !allowedFields.includes(field));
+  if (extraFields?.length > 0) {
+      const invalidResponse = {"message": "Only username, email, and pw fields are allowed"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  const user = req.body.username;
+  const pw = req.body.pw;
+
+  // Validate username
+  if (!validateUsername(user)) {
+    const invalidResponse = {"message": "Username must be 3-30 characters, alphanumeric with ._- only"};
+    responseLogger(400, invalidResponse, req);
+    return res.status(400).json(invalidResponse);
+  }
+
+  if (!validateEmail(req.body.email)) {
+      const invalidResponse = {"message": "Invalid email format"};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  // Validate password
+  if (!validatePassword(pw)) {
+      const invalidResponse = {"message": "Password must be 8+ characters with letter, number, and special character [@,$,!,%,*,?,&,#] "};
+      responseLogger(400, invalidResponse, req);
+      return res.status(400).json(invalidResponse);
+  }
+
+  try {
+      // Fetch the user's salt from the DB
+      const saltResult = await db.collection('users').findOne({ username: user }, { projection: { salt: 1, _id: 0 } });
+      if (!saltResult) {
+        // User not found
+        const invalidResponse = {"message": "Invalid credentials"};
+        responseLogger(401, invalidResponse, req);
+        return res.status(401).json(invalidResponse);
+      }
+
+      const userhash = crypto.pbkdf2Sync(pw, saltResult?.salt, 100000, 64, 'sha256').toString('base64');
+
+      // Check if a user with the provided username and hashed password exists
+      const id = await db.collection('users').findOne({ username: user, hash: userhash }, { projection: { _id: 1 } });
+
+      if (!id) {
+        // User not found
+        const invalidResponse = {"message": "Invalid credentials"};
+        responseLogger(401, invalidResponse, req);
+        return res.status(401).json(invalidResponse);
+      }
+
+      // At this point, credentials have been validated
+      const session = await db.collection('sessions').findOne({ user_id: id});
+      if (session && session?.expires_at > new Date()) {
+        const successResponse = {"message": "User found! Session already established."};
+        responseLogger(200, successResponse, req);
+        return res.status(200).json(successResponse);
+      }
+
+      // Session data
+      const sessionValue = crypto.randomBytes(32).toString('base64');
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 min TTL
+      const newSession = {
+        session_id: sessionValue,
+        user_id: id,
+        username: user,
+        expires_at: expiresAt
+      };
+
+      // If the user does not have an existing session
+      // Create a session object for the user and store in the DB, include user info and session TTL, and generate and store a random session id value
+      // Use set-cookie to return the session_id cookie to the user
+      await db.collection('sessions').insertOne(newSession);
+      // Set the session_id cookie in the response header
+      res.setHeader('Set-Cookie', `session_id=${sessionValue}; HttpOnly; SameSite=Strict; Path=/; Expires=${expiresAt.toUTCString()};`); // Set Secure later, after HTTPS is enabled
+      const successResponse = {"message": "User found! Session created."};
+      responseLogger(201, successResponse, req);
+      return res.status(201).json(successResponse);
+      
+  } catch (error) {
+      const errorResponse = {"Error": "Internal server error"};
+      responseLogger(500, errorResponse, req);
+      return res.status(500).json(errorResponse);
+  }
+});
+
+// 3. authN Check Middleware
+// To check for authentication, authN endpoints will do a DB lookup on the session_id cookie, no cookie, no access
+// If cookie is found in DB AND current time < cookie TTL, provide access to endpoint, if cookie is expired, no access
+async function authN(req, res, next) {
+  try {
+      if (!req.cookies.session_id) {
+          const invalidResponse = {"message": "Unauthorized"};
+          responseLogger(401, invalidResponse, req);
+          return res.status(401).json(invalidResponse);
+      }
+      
+      const sessionValueCookie = req.cookies.session_id;
+      
+      // Check if the session_id cookie exists in the DB and fetch its TTL
+      const expiryResult = await db.collection('sessions').findOne({ session_id: sessionValueCookie }, { projection: { expires_at: 1, _id: 0 } });
+      if (!expiryResult) {
+        const invalidResponse = {"message": "Unauthorized"};
+        responseLogger(401, invalidResponse, req);
+        return res.status(401).json(invalidResponse);
+      }
+
+      if (new Date() >= expiryResult?.expires_at) {
+        const invalidResponse = {"message": "Session expired, validate credentials again"};
+        responseLogger(401, invalidResponse, req);
+        return res.status(401).json(invalidResponse);
+      }
+      next();
+  }
+  catch (error) {
+      const errorResponse = {"Error": error.message || "Internal server error"};
+      responseLogger(500, errorResponse, req);
+      return res.status(500).json(errorResponse);
+  }
+};
+
+// Protected endpoint
+app.get('/api/users/protected', authN, (req, res) => {
+  const successResponse = {"message": "Welcome to the users API!"};
+  responseLogger(200, successResponse, req);
+  return res.status(200).json(successResponse);
 });
 
 app.listen(port, () => {
