@@ -5,7 +5,8 @@ import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import { WebSocketServer } from 'ws';
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
+import AWS from 'aws-sdk';
 import requestLogger from './logging/requestLogger.js';
 import responseLogger from './logging/responseLogger.js';
 import crypto from 'crypto';
@@ -369,55 +370,42 @@ app.post('/api/agent/pathway', authN, async (req, res) => {
       return res.status(401).json({ message: "Session not found" });
     }
 
-    // Set environment variables for Python script
-    process.env.USER_MESSAGE = message;
-    process.env.SESSION_ID = sessionId;
-    process.env.USER_ID = session.user_id.toString();
+    // Call AWS Lambda function instead of spawning Python process
+    const lambda = new AWS.Lambda({
+      region: process.env.AWS_REGION || 'us-east-1',
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    });
 
-    // Execute Python agent
-    // Find Python path dynamically
-    let pythonPath;
+    const lambdaParams = {
+      FunctionName: process.env.LAMBDA_FUNCTION_NAME || 'athena-agent',
+      Payload: JSON.stringify({
+        system_prompt: process.env.ATHENA_SYSTEM_PROMPT,
+        user_message: message,
+        session_id: sessionId,
+        user_id: session.user_id.toString(),
+        mongodb_url: process.env.MONGODB_URL,
+        db_name: process.env.DB_NAME
+      })
+    };
+
     try {
-      pythonPath = execSync('which python3', { encoding: 'utf8' }).trim();
-    } catch {
-      pythonPath = 'python3'; // fallback
-    }
-    
-    const pythonProcess = spawn(pythonPath, ['agent.py'], {
-      cwd: './athena',
-      env: { ...process.env, PATH: "/usr/local/opt/python@3.12/libexec/bin:" + process.env.PATH }
-    });
-
-    let output = '';
-    let error = '';
-
-    pythonProcess.stdout.on('data', (data) => {
-      output += data.toString();
-    });
-
-    pythonProcess.stderr.on('data', (data) => {
-      error += data.toString();
-    });
-
-    pythonProcess.on('close', async (code) => {
-      if (code !== 0) {
-        console.error('Python script error:', error);
-        return res.status(500).json({ message: "Agent processing failed", error });
+      const lambdaResult = await lambda.invoke(lambdaParams).promise();
+      const response = JSON.parse(lambdaResult.Payload);
+      
+      if (response.statusCode === 201) {
+        res.status(201).json({ message: "Pathway created successfully" });
+      } else {
+        const errorBody = JSON.parse(response.body);
+        res.status(response.statusCode).json({ 
+          message: "Agent processing failed", 
+          error: errorBody.message 
+        });
       }
-
-      try {
-        console.log('Python output:', output);
-        console.log('Python error:', error);
-        
-        // Parse the agent output to get the pathway data
-        const lines = output.trim().split('\n');
-        const lastLine = lines[lines.length - 1];
-        
-        if (lastLine === '201') {
-          res.status(201).json({ message: "Pathway created successfully" });
-        } else {
-          res.status(500).json({ message: "Failed to save pathway", output, error });
-        }
+    } catch (error) {
+      console.error('Lambda invocation error:', error);
+      res.status(500).json({ message: "Agent processing failed", error: error.message });
+    }
       } catch (parseError) {
         console.error('Error parsing agent output:', parseError);
         res.status(500).json({ message: "Error processing agent response" });
